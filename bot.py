@@ -1,22 +1,28 @@
 import logging
-import sqlite3
+import psycopg2
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, PreCheckoutQueryHandler, filters
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# 🔑 Yangi bot tokeningiz o'rnatildi
+# 🔑 Bot tokeningiz
 TOKEN = "8833579481:AAGF_mf71WM0AOD6VgngzEMfJiMXqvbyYzo"
 ADMIN_USERNAME = "sots12"
 BOT_USERNAME = "sots12_bot"
 
-# --- BAZA BILAN ISHLASH (SQLITE) ---
+# ☁️ Supabase (PostgreSQL) ulanish havolasi (Siz bergan ma'lumot asosida ulandi)
+DATABASE_URL = "postgresql://postgres:SurvivalBot2026@db.nepzyvfduowlqjjuvlcl.supabase.co:5432/postgres"
+
+def get_db_connection():
+    return psycopg2.connect(DATABASE_URL)
+
+# --- BAZANI YARATISH (SUPABASE) ---
 def init_db():
-    conn = sqlite3.connect("survival_bot.db")
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
-            user_id INTEGER PRIMARY KEY,
+            user_id BIGINT PRIMARY KEY,
             username TEXT,
             name TEXT,
             registered INTEGER,
@@ -26,81 +32,84 @@ def init_db():
         )
     ''')
     conn.commit()
+    cursor.close()
     conn.close()
 
 def get_user(user_id):
-    conn = sqlite3.connect("survival_bot.db")
+    conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT user_id, username, name, registered, in_game, checked_today, lang FROM users WHERE user_id = ?", (user_id,))
+    cursor.execute("SELECT user_id, username, name, registered, in_game, checked_today, lang FROM users WHERE user_id = %s", (user_id,))
     row = cursor.fetchone()
     
     if not row:
-        # Agar foydalanuvchi bazada bo'lmasa, yaratamiz
         cursor.execute('''
             INSERT INTO users (user_id, username, name, registered, in_game, checked_today, lang)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         ''', (user_id, "", None, 0, 0, 0, None))
         conn.commit()
         u_data = {
-            "user_id": user_id,
-            "username": "",
-            "name": None,
-            "registered": 0,
-            "in_game": 0,
-            "checked_today": 0,
-            "lang": None
+            "user_id": user_id, "username": "", "name": None,
+            "registered": 0, "in_game": 0, "checked_today": 0, "lang": None
         }
     else:
         u_data = {
-            "user_id": row[0],
-            "username": row[1],
-            "name": row[2],
-            "registered": row[3],
-            "in_game": row[4],
-            "checked_today": row[5],
-            "lang": row[6]
+            "user_id": row[0], "username": row[1], "name": row[2],
+            "registered": row[3], "in_game": row[4], "checked_today": row[5], "lang": row[6]
         }
+    cursor.close()
     conn.close()
     return u_data
 
 def update_user(user_id, **kwargs):
-    conn = sqlite3.connect("survival_bot.db")
+    conn = get_db_connection()
     cursor = conn.cursor()
     for key, value in kwargs.items():
-        cursor.execute(f"UPDATE users SET {key} = ? WHERE user_id = ?", (value, user_id))
+        cursor.execute(f"UPDATE users SET {key} = %s WHERE user_id = %s", (value, user_id))
     conn.commit()
+    cursor.close()
     conn.close()
 
 def get_all_users():
-    conn = sqlite3.connect("survival_bot.db")
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT user_id, username, name, registered, in_game, checked_today, lang FROM users")
     rows = cursor.fetchall()
+    cursor.close()
     conn.close()
     users = {}
     for row in rows:
         users[row[0]] = {
-            "user_id": row[0],
-            "username": row[1],
-            "name": row[2],
-            "registered": row[3],
-            "in_game": row[4],
-            "checked_today": row[5],
-            "lang": row[6]
+            "user_id": row[0], "username": row[1], "name": row[2],
+            "registered": row[3], "in_game": row[4], "checked_today": row[5], "lang": row[6]
         }
     return users
 
-# 3 Tildagi barcha matnlar, qoidalar va profil yozuvlari
+# Sahifalash uchun funksiya (Har bir sahifada 10 tadan o'yinchi chiqadi)
+def get_paginated_players(page=0, per_page=10):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM users WHERE in_game = 1")
+    total_count = cursor.fetchone()[0]
+    
+    offset = page * per_page
+    cursor.execute("SELECT name, username FROM users WHERE in_game = 1 ORDER BY user_id DESC LIMIT %s OFFSET %s", (per_page, offset))
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return rows, total_count
+
+# 3 Tildagi matnlar
 TEXTS = {
     "uz": {
         "reg_prompt": "📝 **Ro'yxatdan o'tish uchun iltimos o'z username'ingizni '@' belgisi bilan yuboring (masalan: @sots12):**",
         "reg_error": "❌ Username xato! Iltimos, boshiga '@' belgisini qo'yib qaytadan yuboring (masalan: @sots12):",
         "reg_success": "🎉 Tabriklaymiz, ro'yxatdan o'tdingiz!",
-        "welcome": "🏆 **Survival Battle: So'nggi Omon Qolgan**\n\n📜 **O'yin qoidalari:**\n• O'yinga qo'shilish uchun 1 Stars to'lanadi.\n• Har kuni 1 marta '✅ Tirikman' tugmasini bosib o'zingizni tasdiqlang.\n• Agar 1 kun kirmasangiz, o'yindan chiqib ketasiz va qayta kirish uchun yana 1 Stars to'laysiz.\n• Oxirgi qolgan g'olib yig'ilgan fondning **85%** oladi, **15%** platforma komissiyasi!\n\n👥 Tirik o'yinchilar: **{total_players} ta**\n💰 Jami Sovrin Jamg'armasi: **{pool} Stars**\n\nKerakli bo'limni tanlang:",
+        "welcome": "🏆 **Survival Battle: So'nggi Omon Qolgan**\n\n📜 **O'yin qoidalari:**\n• O'yinga qo'shilish uchun 1 Stars to'lanadi.\n• Har kuni 1 marta '✅ Tirikman' tugmasini bosib o'zingizni tasdiqlang.\n• Oxirgi qolgan g'olib yig'ilgan fondning **85%** oladi, **15%** komissiya!\n\n👥 Tirik o'yinchilar: **{total_players} ta**\n💰 Jami Sovrin: **{pool} Stars**\n\nKerakli bo'limni tanlang:",
         "join_title": "Survival O'yiniga Qo'shilish",
         "join_desc": "Omon qolish uchun 1 Stars badal to'lovi",
         "join_btn": "⭐ O'yinga qo'shilish (1 Stars)",
         "checkin_btn": "✅ Tirikman (Kunlik belgi)",
+        "players_btn": "👥 O'yinchilar ro'yxati",
         "share_btn": "📢 Do'stlarga ulashish",
         "profile_btn": "👤 Mening holatim",
         "lang_btn": "🌐 Tilni o'zgartirish",
@@ -109,48 +118,50 @@ TEXTS = {
         "not_in_game": "🔴 O'yinda emas",
         "profile_lang": "Til: O'zbekcha",
         "checked_in": "🎉 Tabriklaymiz, siz o'yindasiz!",
-        "already_checked": "⚠️ Siz bugun allaqachon 'Tirikman' deb belgi qo'ygansiz!",
-        "not_in_game_alert": "❌ Siz o'yinda emassiz! O'yinga qo'shilish uchun 1 Stars to'lang."
+        "already_checked": "⚠️ Siz bugun allaqachon belgi qo'ygansiz!",
+        "not_in_game_alert": "❌ Siz o'yinda emassiz! 1 Stars to'lang."
     },
     "ru": {
-        "reg_prompt": "📝 **Для регистрации пожалуйста отправьте свой username с символом '@' (например: @sots12):**",
-        "reg_error": "❌ Неверный username! Пожалуйста, отправьте заново, начиная с символа '@' (например: @sots12):",
-        "reg_success": "🎉 Поздравляем, вы успешно зарегистрировались!",
-        "welcome": "🏆 **Survival Battle: Последний выживший**\n\n📜 **Правила игры:**\n• Для участия в игре оплачивается 1 Stars.\n• Подтверждайте свое участие кнопкой '✅ Я жив' каждый день.\n• Если пропустите 1 день, выбываете, и для повторного входа потребуется снова оплатить 1 Stars.\n• Победитель забирает **85%** призового фонда, **15%** — комиссия платформы!\n\n👥 Живых игроков: **{total_players}**\n💰 Общий призовой фонд: **{pool} Stars**\n\nВыберите действие:",
+        "reg_prompt": "📝 **Для регистрации отправьте ваш username с '@' (например: @sots12):**",
+        "reg_error": "❌ Неверный username! Отправьте заново с '@':",
+        "reg_success": "🎉 Поздравляем, вы зарегистрированы!",
+        "welcome": "🏆 **Survival Battle: Последний выживший**\n\n👥 Живых игроков: **{total_players}**\n💰 Призовой фонд: **{pool} Stars**\n\nВыберите действие:",
         "join_title": "Участие в Survival Battle",
-        "join_desc": "Взнос 1 Stars для выживания в игре",
+        "join_desc": "Взнос 1 Stars",
         "join_btn": "⭐ Участвовать (1 Stars)",
-        "checkin_btn": "✅ Я жив (Ежедневно)",
-        "share_btn": "📢 Поделиться с другом",
+        "checkin_btn": "✅ Я жив",
+        "players_btn": "👥 Список игроков",
+        "share_btn": "📢 Поделиться",
         "profile_btn": "👤 Мой статус",
-        "lang_btn": "🌐 Сменить язык",
+        "lang_btn": "🌐 Язык",
         "back": "🔙 Назад",
         "in_game": "🟢 В игре",
         "not_in_game": "🔴 Не в игре",
         "profile_lang": "Язык: Русский",
-        "checked_in": "🎉 Поздравляем, вы в игре!",
-        "already_checked": "⚠️ Вы уже отметились как 'Жив' сегодня!",
-        "not_in_game_alert": "❌ Вы не в игре! Оплатите 1 Stars для участия."
+        "checked_in": "🎉 Вы отметились!",
+        "already_checked": "⚠️ Вы уже отметились сегодня!",
+        "not_in_game_alert": "❌ Вы не в игре!"
     },
     "en": {
-        "reg_prompt": "📝 **To register, please send your username starting with '@' (e.g., @sots12):**",
-        "reg_error": "❌ Invalid username! Please send it again starting with '@' (e.g., @sots12):",
-        "reg_success": "🎉 Congratulations, you have successfully registered!",
-        "welcome": "🏆 **Survival Battle: Last Man Standing**\n\n📜 **Game Rules:**\n• Join the game by paying 1 Stars.\n• Click '✅ I am alive' every day to check in.\n• If you miss a day, you are eliminated and must pay 1 Stars again to rejoin.\n• The last winner takes **85%** of the prize pool, **15%** goes to platform commission!\n\n👥 Alive players: **{total_players}**\n💰 Total Prize Pool: **{pool} Stars**\n\nChoose an action:",
+        "reg_prompt": "📝 **To register, send your username with '@':**",
+        "reg_error": "❌ Invalid username! Send again with '@':",
+        "reg_success": "🎉 Successfully registered!",
+        "welcome": "🏆 **Survival Battle: Last Man Standing**\n\n👥 Alive players: **{total_players}**\n💰 Prize Pool: **{pool} Stars**\n\nChoose an action:",
         "join_title": "Join Survival Battle",
-        "join_desc": "1 Stars entry fee to survive",
+        "join_desc": "1 Stars entry fee",
         "join_btn": "⭐ Join Game (1 Stars)",
-        "checkin_btn": "✅ I am alive (Daily check-in)",
-        "share_btn": "📢 Share with friends",
+        "checkin_btn": "✅ I am alive",
+        "players_btn": "👥 Players list",
+        "share_btn": "📢 Share",
         "profile_btn": "👤 My Status",
-        "lang_btn": "🌐 Change Language",
+        "lang_btn": "🌐 Language",
         "back": "🔙 Back",
         "in_game": "🟢 In Game",
         "not_in_game": "🔴 Not in Game",
         "profile_lang": "Language: English",
-        "checked_in": "🎉 Congratulations, you are in the game!",
-        "already_checked": "⚠️ You have already checked in today!",
-        "not_in_game_alert": "❌ You are not in the game! Pay 1 Stars to join."
+        "checked_in": "🎉 Checked in!",
+        "already_checked": "⚠️ Already checked in today!",
+        "not_in_game_alert": "❌ Not in game!"
     }
 }
 
@@ -176,8 +187,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not u_data["registered"]:
         lang = u_data["lang"]
-        t = TEXTS[lang]
-        text = t["reg_prompt"]
+        text = TEXTS[lang]["reg_prompt"]
         if update.message:
             await update.message.reply_text(text, parse_mode="Markdown")
         elif update.callback_query:
@@ -194,7 +204,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton(t["join_btn"], callback_data="join_game")],
         [InlineKeyboardButton(t["checkin_btn"], callback_data="check_in")],
-        [InlineKeyboardButton(t["share_btn"], url=f"https://t.me/share/url?url=https://t.me/{BOT_USERNAME}&text=Survival+o'yiniga+qo'shiling+va+Stars+yutib+oling!")],
+        [InlineKeyboardButton(t["players_btn"], callback_data="players_page_0")],
+        [InlineKeyboardButton(t["share_btn"], url=f"https://t.me/share/url?url=https://t.me/{BOT_USERNAME}&text=Survival+o'yiniga+qo'shiling!")],
         [InlineKeyboardButton(t["profile_btn"], callback_data="my_profile"), InlineKeyboardButton(t["lang_btn"], callback_data="lang_menu")]
     ]
 
@@ -210,9 +221,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     user = query.from_user
     u_data = get_user(user.id)
-    if user.username and u_data["username"] != user.username:
-        update_user(user.id, username=user.username)
-        
     data = query.data
 
     if data.startswith("set_"):
@@ -230,6 +238,35 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "lang_menu":
         update_user(user.id, lang=None, registered=0)
         await start(update, context)
+
+    elif data.startswith("players_page_"):
+        page = int(data.split("_")[2])
+        per_page = 10
+        rows, total_count = get_paginated_players(page, per_page)
+        
+        max_page = (total_count - 1) // per_page if total_count > 0 else 0
+        
+        text = f"👥 **O'yinchilar ro'yxati** (Jami: {total_count} ta):\n\n"
+        if not rows:
+            text += "Hozircha o'yinchilar yo'q."
+        else:
+            for idx, (name, username) in enumerate(rows, start=page * per_page + 1):
+                display_name = name if name else username
+                text += f"{idx}. {display_name}\n"
+        
+        kb_buttons = []
+        nav_buttons = []
+        if page > 0:
+            nav_buttons.append(InlineKeyboardButton("◀️ Oldingi", callback_data=f"players_page_{page-1}"))
+        nav_buttons.append(InlineKeyboardButton(f"📄 {page+1}/{max_page+1}", callback_data="noop"))
+        if page < max_page:
+            nav_buttons.append(InlineKeyboardButton("Keyingi ▶️", callback_data=f"players_page_{page+1}"))
+        
+        if nav_buttons:
+            kb_buttons.append(nav_buttons)
+        kb_buttons.append([InlineKeyboardButton(t["back"], callback_data="back_home")])
+        
+        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(kb_buttons), parse_mode="Markdown")
 
     elif data == "join_game":
         if u_data["in_game"] == 1:
@@ -270,8 +307,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     u_data = get_user(user.id)
-    if user.username and u_data["username"] != user.username:
-        update_user(user.id, username=user.username)
 
     if u_data["lang"] and u_data["registered"] == 0:
         text_input = update.message.text.strip()
@@ -284,19 +319,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         update_user(user.id, name=text_input, registered=1)
         await update.message.reply_text(t["reg_success"])
-
-        all_users = get_all_users()
-        for uid, udat in all_users.items():
-            if udat.get("username", "").lower() == ADMIN_USERNAME.lower():
-                try:
-                    await context.bot.send_message(
-                        chat_id=uid,
-                        text=f"🚨 **Yangi o'yinchi ro'yxatdan o'tdi!**\n\n👤 Username: {text_input}\n🆔 ID: {user.id}",
-                        parse_mode="Markdown"
-                    )
-                except:
-                    pass
-
         await start(update, context)
 
 async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -307,26 +329,9 @@ async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 async def successful_payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     update_user(user.id, in_game=1, checked_today=1)
-
-    all_users = get_all_users()
-    u_data = get_user(user.id)
-
-    for uid, udat in all_users.items():
-        if udat.get("username", "").lower() == ADMIN_USERNAME.lower():
-            try:
-                total_active = sum(1 for u in all_users.values() if u["in_game"] == 1)
-                await context.bot.send_message(
-                    chat_id=uid,
-                    text=f"🎮 **O'yinga qo'shilish (1 Stars to'landi):**\n\n👤 Username: {u_data['name']}\n👥 Jami tirik o'yinchilar: {total_active} ta",
-                    parse_mode="Markdown"
-                )
-            except:
-                pass
-
-    await update.message.reply_text("🎉 **Tabriklaymiz!** Siz o'yinga muvaffaqiyatli qo'shildingiz va asosiy kurashga kirdingiz!")
+    await update.message.reply_text("🎉 **Tabriklaymiz!** Siz o'yinga muvaffaqiyatli qo'shildingiz!")
 
 if __name__ == '__main__':
-    # Bazani ishga tushirish
     init_db()
     
     application = ApplicationBuilder().token(TOKEN).build()
@@ -336,5 +341,6 @@ if __name__ == '__main__':
     application.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
     
-    print("Survival Game Bot to'liq tayyor va ishga tushdi (Ma'lumotlar bazasi ulangan)!")
+    print("Survival Game Bot Supabase va Sahifalangan panel bilan ishga tushdi!")
     application.run_polling()
+        
