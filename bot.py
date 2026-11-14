@@ -10,8 +10,8 @@ TOKEN = "8833579481:AAGF_mf71WM0AOD6VgngzEMfJiMXqvbyYzo"
 ADMIN_USERNAME = "sots12"
 BOT_USERNAME = "sots12_bot"
 
-# ☁️ Supabase (PostgreSQL) ulanish havolasi (Siz bergan ma'lumot asosida ulandi)
-DATABASE_URL = "postgresql://postgres:SurvivalBot2026@db.nepzyvfduowlqjjuvlcl.supabase.co:5432/postgres"
+# ☁️ Supabase Session Pooler ulanish havolasi (6543-port va pooler manzili)
+DATABASE_URL = "postgresql://postgres.nepzyvfduowlqjjuvlcl:SurvivalBot2026@aws-0-eu-central-1.pooler.supabase.com:6543/postgres"
 
 def get_db_connection():
     return psycopg2.connect(DATABASE_URL)
@@ -343,4 +343,3 @@ if __name__ == '__main__':
     
     print("Survival Game Bot Supabase va Sahifalangan panel bilan ishga tushdi!")
     application.run_polling()
-        
