@@ -1,5 +1,5 @@
 import logging
-import sqlite3
+import psycopg2
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, PreCheckoutQueryHandler, filters
 
@@ -10,13 +10,19 @@ TOKEN = "8833579481:AAGF_mf71WM0AOD6VgngzEMfJiMXqvbyYzo"
 ADMIN_USERNAME = "sots12"
 BOT_USERNAME = "sots12_bot"
 
-# --- BAZANI YARATISH (SQLITE - Mahalliy va xatolarsiz) ---
+# ☁️ Supabase (PostgreSQL) ulanish havolasi (Siz bergan ma'lumot asosida ulandi)
+DATABASE_URL = "postgresql://postgres:SurvivalBot2026@db.nepzyvfduowlqjjuvlcl.supabase.co:5432/postgres"
+
+def get_db_connection():
+    return psycopg2.connect(DATABASE_URL)
+
+# --- BAZANI YARATISH (SUPABASE) ---
 def init_db():
-    conn = sqlite3.connect("survival_bot.db")
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
-            user_id INTEGER PRIMARY KEY,
+            user_id BIGINT PRIMARY KEY,
             username TEXT,
             name TEXT,
             registered INTEGER,
@@ -30,15 +36,15 @@ def init_db():
     conn.close()
 
 def get_user(user_id):
-    conn = sqlite3.connect("survival_bot.db")
+    conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT user_id, username, name, registered, in_game, checked_today, lang FROM users WHERE user_id = ?", (user_id,))
+    cursor.execute("SELECT user_id, username, name, registered, in_game, checked_today, lang FROM users WHERE user_id = %s", (user_id,))
     row = cursor.fetchone()
     
     if not row:
         cursor.execute('''
             INSERT INTO users (user_id, username, name, registered, in_game, checked_today, lang)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         ''', (user_id, "", None, 0, 0, 0, None))
         conn.commit()
         u_data = {
@@ -55,16 +61,16 @@ def get_user(user_id):
     return u_data
 
 def update_user(user_id, **kwargs):
-    conn = sqlite3.connect("survival_bot.db")
+    conn = get_db_connection()
     cursor = conn.cursor()
     for key, value in kwargs.items():
-        cursor.execute(f"UPDATE users SET {key} = ? WHERE user_id = ?", (value, user_id))
+        cursor.execute(f"UPDATE users SET {key} = %s WHERE user_id = %s", (value, user_id))
     conn.commit()
     cursor.close()
     conn.close()
 
 def get_all_users():
-    conn = sqlite3.connect("survival_bot.db")
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT user_id, username, name, registered, in_game, checked_today, lang FROM users")
     rows = cursor.fetchall()
@@ -80,13 +86,13 @@ def get_all_users():
 
 # Sahifalash uchun funksiya (Har bir sahifada 10 tadan o'yinchi chiqadi)
 def get_paginated_players(page=0, per_page=10):
-    conn = sqlite3.connect("survival_bot.db")
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) FROM users WHERE in_game = 1")
     total_count = cursor.fetchone()[0]
     
     offset = page * per_page
-    cursor.execute("SELECT name, username FROM users WHERE in_game = 1 ORDER BY user_id DESC LIMIT ? OFFSET ?", (per_page, offset))
+    cursor.execute("SELECT name, username FROM users WHERE in_game = 1 ORDER BY user_id DESC LIMIT %s OFFSET %s", (per_page, offset))
     rows = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -335,5 +341,5 @@ if __name__ == '__main__':
     application.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
     
-    print("Survival Game Bot SQLite baza bilan ishga tushdi!")
+    print("Survival Game Bot Supabase va Sahifalangan panel bilan ishga tushdi!")
     application.run_polling()
