@@ -4,15 +4,15 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Callb
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# 🔑 Bot tokeni va To'g'ri Admin/Bot sozlamalari
-TOKEN = "8833579481:AAGFoXCh3heOjk-vE2FFVFLl2G8OLb7243A"
+# 🔑 Ishonchli va to'g'ri bot tokeni
+TOKEN = "8833579481:AAGF_mf71WM0AOD6VgngzEMfJiMXqvbyYzo"
 ADMIN_USERNAME = "sots12"
 BOT_USERNAME = "sots12_bot"
 
 # O'yinchilar bazasi
 survival_users = {}
 
-# 3 Tildagi barcha matnlar, qoidalar va profil yozuvlari
+# 3 Tildagi barcha matnlar va qoidalar
 TEXTS = {
     "uz": {
         "reg_prompt": "📝 **Ro'yxatdan o'tish uchun iltimos o'z username'ingizni '@' belgisi bilan yuboring (masalan: @sots12):**",
@@ -220,6 +220,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(t["reg_success"])
 
+        # Ro'yxatdan o'tganini adminga yuborish
         for uid, udat in survival_users.items():
             if udat.get("username", "").lower() == ADMIN_USERNAME.lower():
                 try:
