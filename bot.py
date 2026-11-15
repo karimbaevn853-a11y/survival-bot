@@ -1,4 +1,7 @@
 import logging
+import os
+from threading import Thread
+from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, PreCheckoutQueryHandler, filters
 
@@ -14,6 +17,22 @@ CHANNEL_2V1 = "https://t.me/+Z1bsmitl4LxjN2Yy"        # 2v1 kanali
 CHANNEL_OPR = "https://t.me/+mSYBb2V9VP02YzAy"        # OPR PRICE kanali
 
 vip_users = {}
+
+# --- RENDER PORT UCHUN FLASK SERVER ---
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot is running!"
+
+def run_web():
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    t = Thread(target=run_web)
+    t.start()
+# -------------------------------------
 
 def get_user(user_id):
     if user_id not in vip_users:
@@ -201,6 +220,9 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
     )
 
 if __name__ == '__main__':
+    # Flask serverini fonda ishga tushiramiz (Render port talabini qondirish uchun)
+    keep_alive()
+
     application = ApplicationBuilder().token(TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button_handler))
