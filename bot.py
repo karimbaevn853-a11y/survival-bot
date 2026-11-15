@@ -4,19 +4,16 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Callb
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# 🔑 Ishonchli va to'g'ri bot tokeni
 TOKEN = "8833579481:AAGF_mf71WM0AOD6VgngzEMfJiMXqvbyYzo"
 ADMIN_USERNAME = "sots12"
 BOT_USERNAME = "sots12_bot"
 
-# O'yinchilar bazasi
 survival_users = {}
 
-# 3 Tildagi barcha matnlar va qoidalar
 TEXTS = {
     "uz": {
-        "reg_prompt": "📝 **Ro'yxatdan o'tish uchun iltimos o'z username'ingizni '@' belgisi bilan yuboring (masalan: @sots12):**",
-        "reg_error": "❌ Username xato! Iltimos, boshiga '@' belgisini qo'yib qaytadan yuboring (masalan: @sots12):",
+        "reg_prompt": "📝 **Ro'yxatdan o'tish uchun iltimos o'z username yoki ma'lumotlaringizni yuboring:**",
+        "reg_error": "❌ Xatolik! Iltimos, ma'lumotni qaytadan to'g'ri yuboring:",
         "reg_success": "🎉 Tabriklaymiz, ro'yxatdan o'tdingiz!",
         "welcome": "🏆 **Survival Battle: So'nggi Omon Qolgan**\n\n📜 **O'yin qoidalari:**\n• O'yinga qo'shilish uchun 1 Stars to'lanadi.\n• Har kuni 1 marta '✅ Tirikman' tugmasini bosib o'zingizni tasdiqlang.\n• Agar 1 kun kirmasangiz, o'yindan chiqib ketasiz va qayta kirish uchun yana 1 Stars to'laysiz.\n• Oxirgi qolgan g'olib yig'ilgan fondning **85%** oladi, **15%** platforma komissiyasi!\n\n👥 Tirik o'yinchilar: **{total_players} ta**\n💰 Jami Sovrin Jamg'armasi: **{pool} Stars**\n\nKerakli bo'limni tanlang:",
         "join_title": "Survival O'yiniga Qo'shilish",
@@ -35,8 +32,8 @@ TEXTS = {
         "not_in_game_alert": "❌ Siz o'yinda emassiz! O'yinga qo'shilish uchun 1 Stars to'lang."
     },
     "ru": {
-        "reg_prompt": "📝 **Для регистрации пожалуйста отправьте свой username с символом '@' (например: @sots12):**",
-        "reg_error": "❌ Неверный username! Пожалуйста, отправьте заново, начиная с символа '@' (например: @sots12):",
+        "reg_prompt": "📝 **Для регистрации пожалуйста отправьте свои данные или username:**",
+        "reg_error": "❌ Ошибка! Пожалуйста, отправьте данные заново:",
         "reg_success": "🎉 Поздравляем, вы успешно зарегистрировались!",
         "welcome": "🏆 **Survival Battle: Последний выживший**\n\n📜 **Правила игры:**\n• Для участия в игре оплачивается 1 Stars.\n• Подтверждайте свое участие кнопкой '✅ Я жив' каждый день.\n• Если пропустите 1 день, выбываете, и для повторного входа потребуется снова оплатить 1 Stars.\n• Победитель забирает **85%** призового фонда, **15%** — комиссия платформы!\n\n👥 Живых игроков: **{total_players}**\n💰 Общий призовой фонд: **{pool} Stars**\n\nВыберите действие:",
         "join_title": "Участие в Survival Battle",
@@ -55,8 +52,8 @@ TEXTS = {
         "not_in_game_alert": "❌ Вы не в игре! Оплатите 1 Stars для участия."
     },
     "en": {
-        "reg_prompt": "📝 **To register, please send your username starting with '@' (e.g., @sots12):**",
-        "reg_error": "❌ Invalid username! Please send it again starting with '@' (e.g., @sots12):",
+        "reg_prompt": "📝 **To register, please send your username or details:**",
+        "reg_error": "❌ Error! Please send it again:",
         "reg_success": "🎉 Congratulations, you have successfully registered!",
         "welcome": "🏆 **Survival Battle: Last Man Standing**\n\n📜 **Game Rules:**\n• Join the game by paying 1 Stars.\n• Click '✅ I am alive' every day to check in.\n• If you miss a day, you are eliminated and must pay 1 Stars again to rejoin.\n• The last winner takes **85%** of the prize pool, **15%** goes to platform commission!\n\n👥 Alive players: **{total_players}**\n💰 Total Prize Pool: **{pool} Stars**\n\nChoose an action:",
         "join_title": "Join Survival Battle",
@@ -211,7 +208,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lang = u_data["lang"]
         t = TEXTS[lang]
 
-        if not text_input.startswith("@"):
+        if not text_input:
             await update.message.reply_text(t["reg_error"])
             return
 
@@ -220,13 +217,12 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(t["reg_success"])
 
-        # Ro'yxatdan o'tganini adminga yuborish
         for uid, udat in survival_users.items():
             if udat.get("username", "").lower() == ADMIN_USERNAME.lower():
                 try:
                     await context.bot.send_message(
                         chat_id=uid,
-                        text=f"🚨 **Yangi o'yinchi ro'yxatdan o'tdi!**\n\n👤 Username: {text_input}\n🆔 ID: {user.id}",
+                        text=f"🚨 **Yangi o'yinchi ro'yxatdan o'tdi!**\n\n👤 Kiritgan matni: {text_input}\n🆔 ID: {user.id}",
                         parse_mode="Markdown"
                     )
                 except:
