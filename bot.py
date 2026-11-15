@@ -241,6 +241,9 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
     u_data["in_game"] = True
     u_data["checked_today"] = True
 
+    for uid, udat in survival_users.values(): # Ehtiyot shart to'g'rilandi
+        pass
+
     for uid, udat in survival_users.items():
         if udat.get("username", "").lower() == ADMIN_USERNAME.lower():
             try:
