@@ -3,7 +3,7 @@ import os
 from threading import Thread
 me)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-TOKEN = "8833579481:AAGF_mf71WM0AOD6VgngzEMfJiMXqvbyYzo"
+TOKEN = "8833579481:AAGF_mAOD6VgngzEMfJiMXqvbyYzo"
 ADMIN_USERNAME = "sots12"
 BOT_USERNAME = "sots12_bot"
 
