@@ -1,11 +1,7 @@
 import logging
 import os
 from threading import Thread
-from flask import Flask
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, PreCheckoutQueryHandler, filters
-
-logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
+me)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 TOKEN = "8833579481:AAGF_mf71WM0AOD6VgngzEMfJiMXqvbyYzo"
 ADMIN_USERNAME = "sots12"
